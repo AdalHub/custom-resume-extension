@@ -61,8 +61,10 @@ async function generateCoverLetterPDF(coverLetterData, outputPath) {
  * @returns {string} HTML content
  */
 function generateResumeHTML(resumeData) {
-  // For now, we'll use a simple template
-  // Later this will be populated with actual resume data
+  // resumeData is now the tailoredResumeJson from Gemini
+  const basics = resumeData.basics || {};
+  const links = basics.links || {};
+  
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -123,7 +125,7 @@ function generateResumeHTML(resumeData) {
       font-weight: 600;
     }
     
-    .experience-item, .education-item {
+    .experience-item, .education-item, .project-item {
       margin-bottom: 20px;
     }
     
@@ -193,12 +195,15 @@ function generateResumeHTML(resumeData) {
 <body>
   <div class="resume-container">
     <div class="header">
-      <h1>${resumeData.name || 'Your Name'}</h1>
+      <h1>${basics.name || 'Your Name'}</h1>
       <div class="contact-info">
-        ${resumeData.email ? `<span>${resumeData.email}</span>` : ''}
-        ${resumeData.phone ? `<span>${resumeData.phone}</span>` : ''}
-        ${resumeData.location ? `<span>${resumeData.location}</span>` : ''}
-        ${resumeData.linkedIn ? `<span>${resumeData.linkedIn}</span>` : ''}
+        ${basics.email ? `<span>${basics.email}</span>` : ''}
+        ${basics.phone ? `<span>${basics.phone}</span>` : ''}
+        ${basics.location ? `<span>${basics.location}</span>` : ''}
+        ${links.linkedIn ? `<span>${links.linkedIn}</span>` : ''}
+        ${links.github ? `<span>${links.github}</span>` : ''}
+        ${links.portfolio ? `<span>${links.portfolio}</span>` : ''}
+        ${links.website ? `<span>${links.website}</span>` : ''}
       </div>
     </div>
     
@@ -217,15 +222,39 @@ function generateResumeHTML(resumeData) {
           <div class="item-header">
             <div>
               <div class="item-title">${exp.title || ''}</div>
-              <div class="item-company">${exp.company || ''}</div>
+              <div class="item-company">${exp.company || ''}${exp.location ? `, ${exp.location}` : ''}</div>
             </div>
             <div class="item-date">${exp.startDate || ''} - ${exp.endDate || 'Present'}</div>
           </div>
-          ${exp.description ? `
+          ${exp.bullets && exp.bullets.length > 0 ? `
           <div class="item-description">
-            ${Array.isArray(exp.description) 
-              ? `<ul>${exp.description.map(bullet => `<li>${bullet}</li>`).join('')}</ul>`
-              : `<p>${exp.description}</p>`}
+            <ul>
+              ${exp.bullets.map(bullet => `<li>${escapeHtml(bullet.text || '')}</li>`).join('')}
+            </ul>
+          </div>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>
+    ` : ''}
+    
+    ${resumeData.projects && resumeData.projects.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Projects</div>
+      ${resumeData.projects.map(project => `
+        <div class="project-item">
+          <div class="item-header">
+            <div>
+              <div class="item-title">${project.name || ''}${project.url ? ` - <a href="${project.url}">${project.url}</a>` : ''}</div>
+              ${project.description ? `<div class="item-company">${project.description}</div>` : ''}
+              ${project.technologies && project.technologies.length > 0 ? `<div class="item-company">${project.technologies.join(', ')}</div>` : ''}
+            </div>
+          </div>
+          ${project.bullets && project.bullets.length > 0 ? `
+          <div class="item-description">
+            <ul>
+              ${project.bullets.map(bullet => `<li>${escapeHtml(bullet.text || '')}</li>`).join('')}
+            </ul>
           </div>
           ` : ''}
         </div>
@@ -242,8 +271,9 @@ function generateResumeHTML(resumeData) {
             <div>
               <div class="item-title">${edu.degree || ''}</div>
               <div class="item-school">${edu.school || ''}</div>
+              ${edu.honors && edu.honors.length > 0 ? `<div class="item-company">${edu.honors.join(', ')}</div>` : ''}
             </div>
-            <div class="item-date">${edu.graduationDate || ''}</div>
+            <div class="item-date">${edu.graduationDate || ''}${edu.gpa ? ` | GPA: ${edu.gpa}` : ''}</div>
           </div>
         </div>
       `).join('')}
@@ -254,7 +284,7 @@ function generateResumeHTML(resumeData) {
     <div class="section">
       <div class="section-title">Skills</div>
       <div class="skills">
-        ${resumeData.skills.map(skill => `<span class="skill-tag">${skill}</span>`).join('')}
+        ${resumeData.skills.map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('')}
       </div>
     </div>
     ` : ''}
@@ -262,6 +292,18 @@ function generateResumeHTML(resumeData) {
 </body>
 </html>
   `;
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
 }
 
 /**

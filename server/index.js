@@ -6,7 +6,9 @@ const fs = require('fs').promises;
 require('dotenv').config();
 
 const { generateResumePDF, generateCoverLetterPDF } = require('./utils/pdfGenerator');
-const { parseResumeText } = require('./utils/resumeParser');
+const { generateTailoredResume } = require('./services/geminiService');
+const { verifyBullets, calculateTruthScore, generateFlags } = require('./services/verifierService');
+const { generateInputSchema } = require('./schemas');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,14 +39,9 @@ app.post('/api/health', (req, res) => {
 // Generate endpoint
 app.post('/api/generate', async (req, res) => {
   try {
-    const { jobText, resumeText, includeCoverLetter } = req.body;
-
-    // Validate input
-    if (!jobText || !resumeText) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: jobText and resumeText are required' 
-      });
-    }
+    // Validate input with Zod
+    const validatedInput = generateInputSchema.parse(req.body);
+    const { jobText, resumeText, includeCoverLetter } = validatedInput;
 
     // Generate unique ID
     const generationId = `gen_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -53,26 +50,56 @@ app.post('/api/generate', async (req, res) => {
     const generationDir = path.join(STORAGE_DIR, generationId);
     await fs.mkdir(generationDir, { recursive: true });
 
-    // Parse resume text into structured format
-    const resumeData = parseResumeText(resumeText);
+    // Call Gemini to generate tailored resume
+    console.log('Calling Gemini API for generation...');
+    const geminiOutput = await generateTailoredResume(jobText, resumeText, includeCoverLetter);
+    
+    const { tailoredResumeJson, coverLetterText, claimMap, suggestedAdditions } = geminiOutput;
 
-    // Generate resume PDF
+    // Verify all bullets against original resumeText
+    console.log('Calling Gemini API for verification...');
+    const verifications = await verifyBullets(resumeText, tailoredResumeJson);
+
+    // Calculate truth score using verifier algorithm
+    // Start at 100, -0 for SUPPORTED, -8 for STRETCH, -20 for UNSUPPORTED
+    const truthScore = calculateTruthScore(verifications);
+
+    // Generate flags from verifications (STRETCH and UNSUPPORTED bullets)
+    const verificationFlags = generateFlags(verifications);
+
+    // Generate flags from suggestedAdditions (things job wants but resume doesn't have)
+    const missingRequirementFlags = (suggestedAdditions || []).map(suggestion => ({
+      bulletId: null,
+      bulletText: null,
+      status: 'MISSING_REQUIREMENT',
+      reason: suggestion.reason,
+      evidence: 'none',
+      suggestedFix: suggestion.suggestedText,
+      section: 'requirements',
+      type: 'missing_requirement',
+      requirement: suggestion.requirement
+    }));
+
+    // Combine all flags
+    const flags = [...verificationFlags, ...missingRequirementFlags];
+
+    // Generate resume PDF from tailored resume JSON
     const resumePdfPath = path.join(generationDir, 'resume.pdf');
-    await generateResumePDF(resumeData, resumePdfPath);
+    await generateResumePDF(tailoredResumeJson, resumePdfPath);
 
     // Generate cover letter PDF if requested
     let coverLetterPdfPath = null;
-    if (includeCoverLetter) {
+    if (includeCoverLetter && coverLetterText) {
       coverLetterPdfPath = path.join(generationDir, 'cover.pdf');
       const coverLetterData = {
         date: new Date().toLocaleDateString(),
         recipientName: 'Hiring Manager',
         company: 'Company Name',
         greeting: 'Dear Hiring Manager,',
-        body: `I am writing to express my interest in the position. Based on the job description, I believe my skills and experience align well with your requirements.`,
+        body: coverLetterText,
         closing: 'Thank you for considering my application. I look forward to the opportunity to discuss how I can contribute to your team.',
-        senderName: resumeData.name,
-        senderTitle: 'Software Engineer'
+        senderName: tailoredResumeJson.basics.name,
+        senderTitle: tailoredResumeJson.experience[0]?.title || 'Professional'
       };
       await generateCoverLetterPDF(coverLetterData, coverLetterPdfPath);
     }
@@ -83,10 +110,13 @@ app.post('/api/generate', async (req, res) => {
       jobText,
       resumeText,
       includeCoverLetter: includeCoverLetter || false,
-      truthScore: 92, // Dummy value for now
-      flags: [], // Empty for now
-      createdAt: new Date().toISOString(),
-      resumeData
+      tailoredResumeJson,
+      claimMap,
+      suggestedAdditions,
+      verifications,
+      truthScore,
+      flags,
+      createdAt: new Date().toISOString()
     };
 
     generations.set(generationId, generation);
@@ -94,18 +124,31 @@ app.post('/api/generate', async (req, res) => {
     // Response
     res.json({
       generationId,
-      truthScore: generation.truthScore,
-      flags: generation.flags,
+      truthScore,
+      flags,
+      claimMap,
+      verifications, // Include full verification results
+      suggestedAdditions: suggestedAdditions || [],
       pdfUrl: `${BASE_URL}/api/generation/${generationId}/resume.pdf`,
-      coverLetterPdfUrl: includeCoverLetter 
+      coverLetterPdfUrl: includeCoverLetter && coverLetterPdfPath
         ? `${BASE_URL}/api/generation/${generationId}/cover.pdf`
         : null
     });
   } catch (error) {
     console.error('Error in /api/generate:', error);
+    
+    // Handle Zod validation errors
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Invalid input', 
+        details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+      });
+    }
+    
     res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
+
 
 // Serve PDF endpoint
 app.get('/api/generation/:id/resume.pdf', async (req, res) => {
