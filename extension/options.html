@@ -88,6 +88,33 @@
           <button id="loadBtn" class="btn btn-secondary">Load Saved Resume</button>
         </div>
       </section>
+
+      <!-- Backend Configuration -->
+      <section class="backend-section">
+        <h2>Backend Configuration</h2>
+        <p class="help-text">Configure the backend server URL</p>
+        
+        <div class="input-container">
+          <label for="backendUrl" style="display: block; margin-bottom: 8px; font-weight: 500; color: #374151;">
+            Backend URL
+          </label>
+          <input 
+            type="text" 
+            id="backendUrl" 
+            placeholder="http://localhost:8787"
+            style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;"
+          />
+          <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            Default: http://localhost:8787
+          </p>
+        </div>
+
+        <div class="actions">
+          <button id="saveBackendBtn" class="btn btn-primary">Save Backend URL</button>
+        </div>
+
+        <div id="backendStatusMessage" class="status-message hidden"></div>
+      </section>
     </main>
   </div>
 

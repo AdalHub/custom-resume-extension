@@ -1,6 +1,7 @@
 // Options page JavaScript for resume input management
 
 const STORAGE_KEY = 'resumeText';
+const BACKEND_URL_KEY = 'backendUrl';
 
 // DOM elements
 const resumeTextarea = document.getElementById('resumeText');
@@ -18,10 +19,14 @@ const previewContainer = document.getElementById('previewContainer');
 const pasteContainer = document.getElementById('pasteContainer');
 const uploadContainer = document.getElementById('uploadContainer');
 const inputMethodRadios = document.querySelectorAll('input[name="inputMethod"]');
+const backendUrlInput = document.getElementById('backendUrl');
+const saveBackendBtn = document.getElementById('saveBackendBtn');
+const backendStatusMessage = document.getElementById('backendStatusMessage');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   loadSavedResume();
+  loadBackendUrl();
   setupEventListeners();
   updateCharCount();
 });
@@ -61,6 +66,9 @@ function setupEventListeners() {
   inputMethodRadios.forEach(radio => {
     radio.addEventListener('change', handleInputMethodChange);
   });
+
+  // Backend URL save
+  saveBackendBtn.addEventListener('click', saveBackendUrl);
 }
 
 // Update character count
@@ -227,6 +235,58 @@ function showStatus(message, type = 'info') {
   // Auto-hide after 3 seconds
   setTimeout(() => {
     statusMessage.classList.add('hidden');
+  }, 3000);
+}
+
+// Load backend URL
+async function loadBackendUrl() {
+  try {
+    const result = await chrome.storage.local.get([BACKEND_URL_KEY]);
+    if (result[BACKEND_URL_KEY]) {
+      backendUrlInput.value = result[BACKEND_URL_KEY];
+    } else {
+      backendUrlInput.value = 'http://localhost:8787';
+    }
+  } catch (error) {
+    console.error('Error loading backend URL:', error);
+  }
+}
+
+// Save backend URL
+async function saveBackendUrl() {
+  const backendUrl = backendUrlInput.value.trim();
+  
+  if (!backendUrl) {
+    showBackendStatus('Please enter a backend URL', 'error');
+    return;
+  }
+
+  // Basic URL validation
+  try {
+    new URL(backendUrl);
+  } catch (e) {
+    showBackendStatus('Please enter a valid URL (e.g., http://localhost:8787)', 'error');
+    return;
+  }
+
+  try {
+    await chrome.storage.local.set({ [BACKEND_URL_KEY]: backendUrl });
+    showBackendStatus('Backend URL saved successfully!', 'success');
+  } catch (error) {
+    console.error('Error saving backend URL:', error);
+    showBackendStatus('Error saving backend URL', 'error');
+  }
+}
+
+// Show backend status message
+function showBackendStatus(message, type = 'info') {
+  backendStatusMessage.textContent = message;
+  backendStatusMessage.className = `status-message ${type}`;
+  backendStatusMessage.classList.remove('hidden');
+  
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    backendStatusMessage.classList.add('hidden');
   }, 3000);
 }
 
