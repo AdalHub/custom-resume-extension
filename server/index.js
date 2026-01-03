@@ -9,13 +9,12 @@ const { generateResumePDF, generateCoverLetterPDF } = require('./utils/pdfGenera
 const { generateTailoredResume } = require('./services/geminiService');
 const { verifyBullets, calculateTruthScore, generateFlags } = require('./services/verifierService');
 const { generateInputSchema } = require('./schemas');
+const { connectToMongoDB, getCollections, createIndexes } = require('./db/mongodb');
+const { createGenerationDocument, formatGenerationForResponse } = require('./models/generationModel');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
-
-// In-memory store for generations (will be replaced with MongoDB later)
-const generations = new Map();
 
 // Ensure storage directory exists
 const STORAGE_DIR = path.join(__dirname, 'storage');
@@ -41,7 +40,7 @@ app.post('/api/generate', async (req, res) => {
   try {
     // Validate input with Zod
     const validatedInput = generateInputSchema.parse(req.body);
-    const { jobText, resumeText, includeCoverLetter } = validatedInput;
+    const { jobText, resumeText, includeCoverLetter, userId, jobUrl } = validatedInput;
 
     // Generate unique ID
     const generationId = `gen_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -104,10 +103,13 @@ app.post('/api/generate', async (req, res) => {
       await generateCoverLetterPDF(coverLetterData, coverLetterPdfPath);
     }
 
-    // Store generation metadata
-    const generation = {
-      id: generationId,
+    // Save to MongoDB
+    const { generations: generationsCollection } = await getCollections();
+    const generationDoc = createGenerationDocument({
+      generationId,
+      userId: userId || 'anonymous',
       jobText,
+      jobUrl: jobUrl || null,
       resumeText,
       includeCoverLetter: includeCoverLetter || false,
       tailoredResumeJson,
@@ -116,10 +118,11 @@ app.post('/api/generate', async (req, res) => {
       verifications,
       truthScore,
       flags,
-      createdAt: new Date().toISOString()
-    };
+      pdfPath: resumePdfPath,
+      coverPdfPath: coverLetterPdfPath
+    });
 
-    generations.set(generationId, generation);
+    await generationsCollection.insertOne(generationDoc);
 
     // Response
     res.json({
@@ -198,11 +201,94 @@ app.get('/api/generation/:id/cover.pdf', async (req, res) => {
   }
 });
 
-// Initialize storage directory and start server
-ensureStorageDir().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Base URL: ${BASE_URL}`);
-  });
+// GET /api/generations - List generations for a user
+app.get('/api/generations', async (req, res) => {
+  try {
+    const userId = req.query.userId || 'anonymous';
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = parseInt(req.query.skip) || 0;
+
+    const { generations: generationsCollection } = await getCollections();
+    
+    const generations = await generationsCollection
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip)
+      .toArray();
+
+    const formattedGenerations = generations.map(doc => ({
+      generationId: doc._id,
+      createdAt: doc.createdAt,
+      jobUrl: doc.jobUrl,
+      truthScore: doc.truthScore,
+      flagsCount: doc.flags?.length || 0,
+      pdfUrl: doc.pdfPath ? `${BASE_URL}/api/generation/${doc._id}/resume.pdf` : null,
+      coverLetterPdfUrl: doc.coverPdfPath ? `${BASE_URL}/api/generation/${doc._id}/cover.pdf` : null,
+    }));
+
+    res.json({
+      generations: formattedGenerations,
+      total: formattedGenerations.length,
+      limit,
+      skip
+    });
+  } catch (error) {
+    console.error('Error fetching generations:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
 });
+
+// GET /api/generation/:id - Get generation details
+app.get('/api/generation/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { generations: generationsCollection } = await getCollections();
+    const generation = await generationsCollection.findOne({ _id: id });
+
+    if (!generation) {
+      return res.status(404).json({ error: 'Generation not found' });
+    }
+
+    const formattedGeneration = formatGenerationForResponse(generation);
+    
+    // Add full URLs
+    formattedGeneration.pdfUrl = formattedGeneration.pdfUrl 
+      ? `${BASE_URL}${formattedGeneration.pdfUrl}` 
+      : null;
+    formattedGeneration.coverLetterPdfUrl = formattedGeneration.coverLetterPdfUrl
+      ? `${BASE_URL}${formattedGeneration.coverLetterPdfUrl}`
+      : null;
+
+    res.json(formattedGeneration);
+  } catch (error) {
+    console.error('Error fetching generation:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+// Initialize storage directory, connect to MongoDB, and start server
+async function startServer() {
+  try {
+    // Ensure storage directory exists
+    await ensureStorageDir();
+    
+    // Connect to MongoDB
+    await connectToMongoDB();
+    await createIndexes();
+    
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Base URL: ${BASE_URL}`);
+      console.log('MongoDB connected and ready');
+    });
+  } catch (error) {
+    console.error('Error starting server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 

@@ -109,6 +109,8 @@ const generateInputSchema = z.object({
   jobText: z.string().min(1),
   resumeText: z.string().min(1),
   includeCoverLetter: z.boolean().optional().default(false),
+  userId: z.string().optional(),
+  jobUrl: z.string().url().optional().or(z.literal('')),
 });
 
 module.exports = {
