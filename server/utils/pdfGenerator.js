@@ -22,11 +22,12 @@ async function generatePDF(htmlContent, outputPath) {
       format: 'Letter',
       printBackground: true,
       margin: {
-        top: '0.5in',
+        top: '0.4in',
         right: '0.5in',
-        bottom: '0.5in',
+        bottom: '0.4in',
         left: '0.5in'
-      }
+      },
+      preferCSSPageSize: true
     });
   } finally {
     await browser.close();
@@ -73,6 +74,11 @@ function generateResumeHTML(resumeData) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Resume</title>
   <style>
+    @page {
+      margin: 0.5in;
+      size: letter;
+    }
+    
     * {
       margin: 0;
       padding: 0;
@@ -80,151 +86,238 @@ function generateResumeHTML(resumeData) {
     }
     
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      padding: 20px;
+      font-family: 'Georgia', 'Times New Roman', serif;
+      font-size: 11pt;
+      line-height: 1.5;
+      color: #1a1a1a;
+      background: white;
     }
     
     .resume-container {
       max-width: 8.5in;
       margin: 0 auto;
-      background: white;
+      padding: 0.4in 0.5in;
     }
     
+    /* Header Section */
     .header {
-      border-bottom: 3px solid #2563eb;
-      padding-bottom: 20px;
-      margin-bottom: 30px;
+      text-align: center;
+      margin-bottom: 0.3in;
+      padding-bottom: 0.15in;
+      border-bottom: 2pt solid #2c3e50;
     }
     
     .header h1 {
-      font-size: 32px;
-      color: #1e40af;
-      margin-bottom: 10px;
+      font-size: 24pt;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 0.1in;
+      letter-spacing: 0.5pt;
     }
     
     .header .contact-info {
       display: flex;
+      justify-content: center;
       flex-wrap: wrap;
-      gap: 15px;
-      font-size: 14px;
-      color: #666;
+      gap: 0.15in;
+      font-size: 9.5pt;
+      color: #555;
+      font-family: 'Arial', sans-serif;
     }
     
+    .header .contact-info span {
+      padding: 0 0.08in;
+    }
+    
+    .header .contact-info span:not(:last-child)::after {
+      content: "•";
+      margin-left: 0.15in;
+      color: #999;
+    }
+    
+    /* Section Styling */
     .section {
-      margin-bottom: 25px;
+      margin-bottom: 0.2in;
+      page-break-inside: avoid;
     }
     
     .section-title {
-      font-size: 20px;
-      color: #2563eb;
-      border-bottom: 2px solid #e5e7eb;
-      padding-bottom: 5px;
-      margin-bottom: 15px;
-      font-weight: 600;
+      font-size: 12pt;
+      font-weight: 700;
+      color: #2c3e50;
+      text-transform: uppercase;
+      letter-spacing: 1pt;
+      margin-bottom: 0.1in;
+      padding-bottom: 0.03in;
+      border-bottom: 1pt solid #bdc3c7;
+      font-family: 'Arial', sans-serif;
     }
     
+    /* Summary Section */
+    .summary {
+      font-size: 10.5pt;
+      line-height: 1.6;
+      text-align: justify;
+      margin-bottom: 0.15in;
+      color: #333;
+    }
+    
+    /* Experience/Education/Projects Items */
     .experience-item, .education-item, .project-item {
-      margin-bottom: 20px;
+      margin-bottom: 0.15in;
+      page-break-inside: avoid;
     }
     
     .item-header {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 5px;
+      align-items: flex-start;
+      margin-bottom: 0.05in;
+    }
+    
+    .item-left {
+      flex: 1;
     }
     
     .item-title {
-      font-weight: 600;
-      font-size: 16px;
-      color: #1f2937;
+      font-weight: 700;
+      font-size: 11pt;
+      color: #2c3e50;
+      margin-bottom: 0.02in;
+      font-family: 'Arial', sans-serif;
     }
     
     .item-company, .item-school {
-      font-size: 14px;
-      color: #4b5563;
+      font-size: 10pt;
+      color: #555;
       font-style: italic;
+      margin-bottom: 0.02in;
     }
     
     .item-date {
-      font-size: 14px;
-      color: #6b7280;
+      font-size: 10pt;
+      color: #777;
+      white-space: nowrap;
+      font-family: 'Arial', sans-serif;
+      font-weight: 500;
     }
     
     .item-description {
-      margin-top: 10px;
-      font-size: 14px;
-      line-height: 1.8;
+      margin-top: 0.08in;
+      padding-left: 0.2in;
     }
     
     .item-description ul {
       list-style: none;
-      padding-left: 0;
+      padding: 0;
+      margin: 0;
     }
     
     .item-description li {
-      padding-left: 20px;
+      font-size: 10pt;
+      line-height: 1.6;
+      margin-bottom: 0.05in;
       position: relative;
-      margin-bottom: 5px;
+      padding-left: 0.15in;
+      text-align: justify;
     }
     
     .item-description li:before {
-      content: "•";
+      content: "▸";
       position: absolute;
       left: 0;
-      color: #2563eb;
-      font-weight: bold;
+      color: #2c3e50;
+      font-size: 8pt;
+      top: 0.02in;
     }
     
-    .skills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
+    .item-description li:last-child {
+      margin-bottom: 0;
     }
     
-    .skill-tag {
-      background: #eff6ff;
-      color: #1e40af;
-      padding: 5px 12px;
-      border-radius: 4px;
-      font-size: 14px;
+    /* Skills Grid */
+    .skills-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.08in 0.15in;
+      margin-top: 0.05in;
+    }
+    
+    .skill-item {
+      font-size: 10pt;
+      color: #333;
+      padding: 0.03in 0;
+      border-bottom: 0.5pt dotted #ddd;
+      font-family: 'Arial', sans-serif;
+    }
+    
+    /* Projects specific */
+    .project-tech {
+      font-size: 9.5pt;
+      color: #666;
+      font-style: italic;
+      margin-top: 0.02in;
+    }
+    
+    /* Education specific */
+    .education-honors {
+      font-size: 9.5pt;
+      color: #555;
+      margin-top: 0.02in;
+    }
+    
+    /* Optimize for 1 page */
+    @media print {
+      .section {
+        margin-bottom: 0.15in;
+      }
+      
+      .experience-item, .education-item, .project-item {
+        margin-bottom: 0.12in;
+      }
+      
+      .item-description li {
+        margin-bottom: 0.04in;
+      }
     }
   </style>
 </head>
 <body>
   <div class="resume-container">
+    <!-- Header -->
     <div class="header">
-      <h1>${basics.name || 'Your Name'}</h1>
+      <h1>${escapeHtml(basics.name || 'Your Name')}</h1>
       <div class="contact-info">
-        ${basics.email ? `<span>${basics.email}</span>` : ''}
-        ${basics.phone ? `<span>${basics.phone}</span>` : ''}
-        ${basics.location ? `<span>${basics.location}</span>` : ''}
-        ${links.linkedIn ? `<span>${links.linkedIn}</span>` : ''}
-        ${links.github ? `<span>${links.github}</span>` : ''}
-        ${links.portfolio ? `<span>${links.portfolio}</span>` : ''}
-        ${links.website ? `<span>${links.website}</span>` : ''}
+        ${basics.email ? `<span>${escapeHtml(basics.email)}</span>` : ''}
+        ${basics.phone ? `<span>${escapeHtml(basics.phone)}</span>` : ''}
+        ${basics.location ? `<span>${escapeHtml(basics.location)}</span>` : ''}
+        ${links.linkedIn ? `<span>${escapeHtml(links.linkedIn)}</span>` : ''}
+        ${links.github ? `<span>${escapeHtml(links.github)}</span>` : ''}
+        ${links.portfolio ? `<span>${escapeHtml(links.portfolio)}</span>` : ''}
+        ${links.website ? `<span>${escapeHtml(links.website)}</span>` : ''}
       </div>
     </div>
     
+    <!-- Professional Summary -->
     ${resumeData.summary ? `
     <div class="section">
       <div class="section-title">Professional Summary</div>
-      <p>${resumeData.summary}</p>
+      <div class="summary">${escapeHtml(resumeData.summary)}</div>
     </div>
     ` : ''}
     
+    <!-- Experience -->
     ${resumeData.experience && resumeData.experience.length > 0 ? `
     <div class="section">
-      <div class="section-title">Experience</div>
+      <div class="section-title">Professional Experience</div>
       ${resumeData.experience.map(exp => `
         <div class="experience-item">
           <div class="item-header">
-            <div>
-              <div class="item-title">${exp.title || ''}</div>
-              <div class="item-company">${exp.company || ''}${exp.location ? `, ${exp.location}` : ''}</div>
+            <div class="item-left">
+              <div class="item-title">${escapeHtml(exp.title || '')}</div>
+              <div class="item-company">${escapeHtml(exp.company || '')}${exp.location ? `, ${escapeHtml(exp.location)}` : ''}</div>
             </div>
-            <div class="item-date">${exp.startDate || ''} - ${exp.endDate || 'Present'}</div>
+            <div class="item-date">${escapeHtml(exp.startDate || '')} - ${escapeHtml(exp.endDate || 'Present')}</div>
           </div>
           ${exp.bullets && exp.bullets.length > 0 ? `
           <div class="item-description">
@@ -238,16 +331,20 @@ function generateResumeHTML(resumeData) {
     </div>
     ` : ''}
     
+    <!-- Projects -->
     ${resumeData.projects && resumeData.projects.length > 0 ? `
     <div class="section">
       <div class="section-title">Projects</div>
       ${resumeData.projects.map(project => `
         <div class="project-item">
           <div class="item-header">
-            <div>
-              <div class="item-title">${project.name || ''}${project.url ? ` - <a href="${project.url}">${project.url}</a>` : ''}</div>
-              ${project.description ? `<div class="item-company">${project.description}</div>` : ''}
-              ${project.technologies && project.technologies.length > 0 ? `<div class="item-company">${project.technologies.join(', ')}</div>` : ''}
+            <div class="item-left">
+              <div class="item-title">${escapeHtml(project.name || '')}</div>
+              ${project.description ? `<div class="item-company">${escapeHtml(project.description)}</div>` : ''}
+              ${project.technologies && project.technologies.length > 0 ? `
+                <div class="project-tech">${escapeHtml(project.technologies.join(' • '))}</div>
+              ` : ''}
+              ${project.url ? `<div class="project-tech">${escapeHtml(project.url)}</div>` : ''}
             </div>
           </div>
           ${project.bullets && project.bullets.length > 0 ? `
@@ -262,29 +359,33 @@ function generateResumeHTML(resumeData) {
     </div>
     ` : ''}
     
+    <!-- Education -->
     ${resumeData.education && resumeData.education.length > 0 ? `
     <div class="section">
       <div class="section-title">Education</div>
       ${resumeData.education.map(edu => `
         <div class="education-item">
           <div class="item-header">
-            <div>
-              <div class="item-title">${edu.degree || ''}</div>
-              <div class="item-school">${edu.school || ''}</div>
-              ${edu.honors && edu.honors.length > 0 ? `<div class="item-company">${edu.honors.join(', ')}</div>` : ''}
+            <div class="item-left">
+              <div class="item-title">${escapeHtml(edu.degree || '')}</div>
+              <div class="item-school">${escapeHtml(edu.school || '')}</div>
+              ${edu.honors && edu.honors.length > 0 ? `
+                <div class="education-honors">${escapeHtml(edu.honors.join(', '))}</div>
+              ` : ''}
             </div>
-            <div class="item-date">${edu.graduationDate || ''}${edu.gpa ? ` | GPA: ${edu.gpa}` : ''}</div>
+            <div class="item-date">${escapeHtml(edu.graduationDate || '')}${edu.gpa ? ` | GPA: ${escapeHtml(edu.gpa)}` : ''}</div>
           </div>
         </div>
       `).join('')}
     </div>
     ` : ''}
     
+    <!-- Skills -->
     ${resumeData.skills && resumeData.skills.length > 0 ? `
     <div class="section">
-      <div class="section-title">Skills</div>
-      <div class="skills">
-        ${resumeData.skills.map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('')}
+      <div class="section-title">Technical Skills</div>
+      <div class="skills-grid">
+        ${resumeData.skills.map(skill => `<div class="skill-item">${escapeHtml(skill)}</div>`).join('')}
       </div>
     </div>
     ` : ''}

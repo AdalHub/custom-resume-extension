@@ -7,10 +7,10 @@ const basicsSchema = z.object({
   phone: z.string().optional(),
   location: z.string().optional(),
   links: z.object({
-    linkedIn: z.string().url().optional(),
-    github: z.string().url().optional(),
-    portfolio: z.string().url().optional(),
-    website: z.string().url().optional(),
+    linkedIn: z.string().optional(), // Will normalize to URL format after parsing
+    github: z.string().optional(),
+    portfolio: z.string().optional(),
+    website: z.string().optional(),
   }).optional(),
 });
 
@@ -38,7 +38,7 @@ const projectSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   technologies: z.array(z.string()).optional(),
-  url: z.string().url().optional(),
+  url: z.string().optional(), // Will normalize to URL format after parsing
   bullets: z.array(experienceBulletSchema).optional(),
 });
 
@@ -80,7 +80,7 @@ const tailoredResumeSchema = z.object({
 // Generator output schema
 const generatorOutputSchema = z.object({
   tailoredResumeJson: tailoredResumeSchema,
-  coverLetterText: z.string().optional(),
+  coverLetterText: z.string().nullish(), // Accepts null, undefined, or string
   claimMap: z.array(claimMapEntrySchema),
   suggestedAdditions: z.array(z.object({
     requirement: z.string(),
@@ -95,7 +95,7 @@ const bulletVerificationSchema = z.object({
   status: z.enum(['SUPPORTED', 'STRETCH', 'UNSUPPORTED']),
   reason: z.string(),
   evidence: z.string(), // Quote from resumeText or "none"
-  suggestedFix: z.string().optional(), // Rewritten bullet using only supported claims
+  suggestedFix: z.string().nullish(), // Rewritten bullet using only supported claims (accepts null, undefined, or string)
   bulletId: z.string().optional(), // Identifier for the bullet (section_index_bulletIndex)
 });
 

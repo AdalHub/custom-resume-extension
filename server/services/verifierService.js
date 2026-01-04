@@ -1,16 +1,18 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const { verifierOutputSchema } = require('../schemas');
 
 require('dotenv').config();
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// New SDK automatically gets API key from GEMINI_API_KEY environment variable
+const ai = new GoogleGenAI({});
 
-if (!GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY is not set in environment variables');
-}
-
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+// Model names to try in order
+const modelNames = [
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-pro'
+];
 
 /**
  * Verify all bullets in the tailored resume against original resumeText
@@ -28,10 +30,34 @@ async function verifyBullets(resumeText, tailoredResumeJson) {
 
   const prompt = buildVerifierPrompt(resumeText, bullets);
 
+  let response, text;
+  
+  // Try models in order until one works
+  for (let i = 0; i < modelNames.length; i++) {
+    try {
+      console.log(`Verifier attempting model: ${modelNames[i]}`);
+      
+      // New SDK API structure
+      response = await ai.models.generateContent({
+        model: modelNames[i],
+        contents: prompt
+      });
+      
+      text = response.text;
+      console.log(`✓ Verifier using model: ${modelNames[i]}`);
+      break; // Success, exit loop
+      
+    } catch (modelError) {
+      // If this is the last model, throw the error
+      if (i === modelNames.length - 1) {
+        throw modelError;
+      }
+      // Otherwise, try next model
+      continue;
+    }
+  }
+
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
 
     // Parse JSON from response
     let parsedOutput;
@@ -68,29 +94,77 @@ async function verifyBullets(resumeText, tailoredResumeJson) {
       }
     }
 
+    // Log parsed output for debugging
+    if (!parsedOutput) {
+      console.error('ERROR: parsedOutput is null or undefined');
+      console.error('Response text (first 1000 chars):', text.substring(0, 1000));
+      throw new Error('Failed to parse JSON from verifier response - parsedOutput is null');
+    }
+    
+    console.log('Verifier parsed output keys:', Object.keys(parsedOutput || {}));
+    
+    // Preprocess: convert null to undefined for optional fields in verifications
+    if (parsedOutput.verifications && Array.isArray(parsedOutput.verifications)) {
+      parsedOutput.verifications = parsedOutput.verifications.map(verification => {
+        if (verification.suggestedFix === null) {
+          verification.suggestedFix = undefined;
+        }
+        return verification;
+      });
+    }
+    
     // Validate with Zod schema
-    const validatedOutput = verifierOutputSchema.parse(parsedOutput);
+    try {
+      const validatedOutput = verifierOutputSchema.parse(parsedOutput);
 
-    // Ensure all bullets have bulletId and match with original bullets
-    validatedOutput.verifications = validatedOutput.verifications.map((verification, index) => {
-      // Find matching bullet by text (in case order differs)
-      const matchingBullet = bullets.find(b => 
-        b.bulletText === verification.bulletText || 
-        b.bulletText.includes(verification.bulletText) ||
-        verification.bulletText.includes(b.bulletText)
-      ) || bullets[index];
+      // Ensure all bullets have bulletId and match with original bullets
+      validatedOutput.verifications = validatedOutput.verifications.map((verification, index) => {
+        // Find matching bullet by text (in case order differs)
+        const matchingBullet = bullets.find(b => 
+          b.bulletText === verification.bulletText || 
+          b.bulletText.includes(verification.bulletText) ||
+          verification.bulletText.includes(b.bulletText)
+        ) || bullets[index];
+        
+        return {
+          ...verification,
+          bulletId: verification.bulletId || matchingBullet?.bulletId || `bullet_${index}`
+        };
+      });
+
+      return validatedOutput.verifications;
+    } catch (zodError) {
+      console.error('Verifier schema validation failed');
+      console.error('Error name:', zodError?.name);
+      console.error('Error message:', zodError?.message);
+      console.error('Error object keys:', Object.keys(zodError || {}));
       
-      return {
-        ...verification,
-        bulletId: verification.bulletId || matchingBullet?.bulletId || `bullet_${index}`
-      };
-    });
-
-    return validatedOutput.verifications;
+      // Check if it's a ZodError with the standard structure
+      if (zodError && typeof zodError === 'object') {
+        // Try to access errors in different ways
+        const errors = zodError.errors || zodError.issues || zodError.details || [];
+        
+        if (Array.isArray(errors) && errors.length > 0) {
+          const errorMessages = errors.map(e => {
+            const path = (e && e.path && Array.isArray(e.path)) ? e.path.join('.') : 'unknown';
+            const message = (e && e.message) ? e.message : 'validation failed';
+            return `${path}: ${message}`;
+          });
+          throw new Error(`Invalid verifier output structure: ${errorMessages.join(', ')}`);
+        }
+      }
+      
+      // Fallback error message
+      console.error('Parsed output structure:', JSON.stringify(parsedOutput, null, 2).substring(0, 1000));
+      throw new Error(`Verifier schema validation failed: ${zodError?.message || 'Unknown validation error. Check server logs for details.'}`);
+    }
   } catch (error) {
-    if (error.name === 'ZodError') {
-      console.error('Verifier schema validation error:', error.errors);
-      throw new Error(`Invalid verifier output structure: ${error.errors.map(e => e.path.join('.')).join(', ')}`);
+    // Log the actual error for debugging
+    console.error('Error in verifyBullets:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    if (error.stack) {
+      console.error('Error stack:', error.stack);
     }
     throw error;
   }

@@ -1,16 +1,18 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const { generatorOutputSchema } = require('../schemas');
 
 require('dotenv').config();
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// New SDK automatically gets API key from GEMINI_API_KEY environment variable
+const ai = new GoogleGenAI({});
 
-if (!GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY is not set in environment variables');
-}
-
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+// Model names to try in order (using new SDK model names)
+const modelNames = [
+  'gemini-2.5-flash',  // Latest model from new SDK
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-pro'
+];
 
 /**
  * Generate tailored resume using Gemini with strict fact-checking rules
@@ -22,10 +24,43 @@ const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 async function generateTailoredResume(jobText, resumeText, includeCoverLetter = false) {
   const prompt = buildGeneratorPrompt(jobText, resumeText, includeCoverLetter);
 
+  let response, text;
+  
+  // Try models in order until one works
+  for (let i = 0; i < modelNames.length; i++) {
+    try {
+      console.log(`Attempting to use model: ${modelNames[i]}`);
+      
+      // New SDK API structure
+      response = await ai.models.generateContent({
+        model: modelNames[i],
+        contents: prompt
+      });
+      
+      text = response.text;
+      
+      if (!text) {
+        console.error('Response text is empty or undefined');
+        console.error('Response object:', JSON.stringify(response, null, 2));
+        throw new Error('Empty response from Gemini API');
+      }
+      
+      console.log(`✓ Successfully using model: ${modelNames[i]}`);
+      console.log(`Response text length: ${text.length} characters`);
+      break; // Success, exit loop
+      
+    } catch (modelError) {
+      // If this is the last model, throw the error
+      if (i === modelNames.length - 1) {
+        throw modelError;
+      }
+      // Otherwise, try next model
+      console.log(`Model ${modelNames[i]} failed, trying next...`);
+      continue;
+    }
+  }
+
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
 
     // Parse JSON from response - handle multiple formats
     let parsedOutput;
@@ -62,16 +97,95 @@ async function generateTailoredResume(jobText, resumeText, includeCoverLetter = 
       }
     }
 
+    // Log parsed output for debugging
+    if (!parsedOutput) {
+      console.error('ERROR: parsedOutput is null or undefined');
+      console.error('Response text (first 1000 chars):', text.substring(0, 1000));
+      throw new Error('Failed to parse JSON from Gemini response - parsedOutput is null');
+    }
+    
+    console.log('Parsed output type:', typeof parsedOutput);
+    console.log('Parsed output keys:', Object.keys(parsedOutput || {}));
+    console.log('Parsed output sample:', JSON.stringify(parsedOutput, null, 2).substring(0, 500));
+    
+    // Preprocess: convert null to undefined for optional fields
+    if (parsedOutput.coverLetterText === null) {
+      parsedOutput.coverLetterText = undefined;
+    }
+    
     // Validate with Zod schema
-    const validatedOutput = generatorOutputSchema.parse(parsedOutput);
-
-    return validatedOutput;
+    try {
+      const validatedOutput = generatorOutputSchema.parse(parsedOutput);
+      console.log('✓ Schema validation passed');
+      
+      // Normalize URLs (add https:// if missing)
+      normalizeUrls(validatedOutput);
+      
+      return validatedOutput;
+    } catch (zodError) {
+      console.error('Schema validation failed');
+      console.error('Error name:', zodError?.name);
+      console.error('Error message:', zodError?.message);
+      console.error('Error object keys:', Object.keys(zodError || {}));
+      
+      // Check if it's a ZodError with the standard structure
+      if (zodError && typeof zodError === 'object') {
+        // Try to access errors in different ways
+        const errors = zodError.errors || zodError.issues || zodError.details || [];
+        
+        if (Array.isArray(errors) && errors.length > 0) {
+          const errorMessages = errors.map(e => {
+            const path = (e && e.path && Array.isArray(e.path)) ? e.path.join('.') : 'unknown';
+            const message = (e && e.message) ? e.message : 'validation failed';
+            return `${path}: ${message}`;
+          });
+          throw new Error(`Invalid output structure: ${errorMessages.join(', ')}`);
+        }
+      }
+      
+      // Fallback error message
+      console.error('Parsed output structure:', JSON.stringify(parsedOutput, null, 2).substring(0, 1000));
+      throw new Error(`Schema validation failed: ${zodError?.message || 'Unknown validation error. Check server logs for details.'}`);
+    }
   } catch (error) {
-    if (error.name === 'ZodError') {
-      console.error('Schema validation error:', error.errors);
-      throw new Error(`Invalid output structure: ${error.errors.map(e => e.path.join('.')).join(', ')}`);
+    // Log the actual error for debugging
+    console.error('Error in generateTailoredResume:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    if (error.stack) {
+      console.error('Error stack:', error.stack);
     }
     throw error;
+  }
+}
+
+/**
+ * Normalize URLs in the validated output by adding https:// if missing
+ */
+function normalizeUrls(output) {
+  if (output.tailoredResumeJson?.basics?.links) {
+    const links = output.tailoredResumeJson.basics.links;
+    if (links.linkedIn && !links.linkedIn.startsWith('http')) {
+      links.linkedIn = `https://${links.linkedIn}`;
+    }
+    if (links.github && !links.github.startsWith('http')) {
+      links.github = `https://${links.github}`;
+    }
+    if (links.portfolio && !links.portfolio.startsWith('http')) {
+      links.portfolio = `https://${links.portfolio}`;
+    }
+    if (links.website && !links.website.startsWith('http')) {
+      links.website = `https://${links.website}`;
+    }
+  }
+  
+  // Normalize project URLs
+  if (output.tailoredResumeJson?.projects) {
+    for (const project of output.tailoredResumeJson.projects) {
+      if (project.url && !project.url.startsWith('http')) {
+        project.url = `https://${project.url}`;
+      }
+    }
   }
 }
 
