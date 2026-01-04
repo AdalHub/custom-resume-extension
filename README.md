@@ -1,6 +1,7 @@
 # ProofResume
 
-A resume verification and proofreading application.
+Chrome extension for generating tailored resumes with truth verification.
+
 
 
 

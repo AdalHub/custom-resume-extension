@@ -6,9 +6,13 @@ const BACKEND_URL_KEY = 'backendUrl';
 let currentGeneration = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Animate title on load
+  animateTitle();
+  
   const statusIndicator = document.getElementById('statusIndicator');
   const generateBtn = document.getElementById('generateBtn');
   const openSettingsBtn = document.getElementById('openSettings');
+  const openHistoryBtn = document.getElementById('openHistoryBtn');
   const includeCoverLetterCheckbox = document.getElementById('includeCoverLetter');
   const loadingSpinner = document.getElementById('loadingSpinner');
   const statusArea = document.getElementById('statusArea');
@@ -33,6 +37,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Close button - closes the popup
   closeBtn.addEventListener('click', () => {
     window.close();
+  });
+
+  // Open history page
+  openHistoryBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('history.html') });
   });
 
   // Open settings
@@ -294,4 +303,55 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function animateTitle() {
+  const titleContainer = document.getElementById('titleContainer');
+  const subtitleContainer = document.getElementById('subtitleContainer');
+  const word = 'Align';
+  const subtitle = 'Make sure you are on the webpage with the job description';
+  
+  // Clear containers
+  titleContainer.innerHTML = '';
+  subtitleContainer.innerHTML = '';
+  
+  // Animate each letter of "Align"
+  word.split('').forEach((letter, index) => {
+    const span = document.createElement('span');
+    span.className = 'title-letter';
+    span.textContent = letter;
+    span.style.animationDelay = `${index * 0.15}s`;
+    titleContainer.appendChild(span);
+  });
+  
+  // Animate subtitle after title animation completes
+  setTimeout(() => {
+    typeSubtitle(subtitleContainer, subtitle);
+  }, word.length * 150 + 300); // Wait for all letters to animate + 300ms
+}
+
+function typeSubtitle(container, text) {
+  let index = 0;
+  const typingSpeed = 40; // milliseconds per character
+  
+  // Make container visible
+  container.classList.add('visible');
+  
+  function type() {
+    if (index < text.length) {
+      container.textContent = text.substring(0, index + 1) + '|';
+      index++;
+      setTimeout(type, typingSpeed);
+    } else {
+      // Remove cursor after typing completes
+      setTimeout(() => {
+        container.textContent = text;
+      }, 300);
+    }
+  }
+  
+  // Start typing after a short delay
+  setTimeout(() => {
+    type();
+  }, 200);
 }

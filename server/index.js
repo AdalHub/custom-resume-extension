@@ -339,6 +339,7 @@ app.get('/api/generations', async (req, res) => {
       jobUrl: doc.jobUrl,
       truthScore: doc.truthScore,
       flagsCount: doc.flags?.length || 0,
+      flags: doc.flags || [], // Include full flags array
       pdfUrl: doc.pdfPath ? `${BASE_URL}/api/generation/${doc._id}/resume.pdf` : null,
       coverLetterPdfUrl: doc.coverPdfPath ? `${BASE_URL}/api/generation/${doc._id}/cover.pdf` : null,
     }));

@@ -1,8 +1,8 @@
-// Background service worker for ProofResume extension
+// Background service worker for Align extension
 
 // Install/update handler
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('ProofResume extension installed');
+  console.log('Align extension installed');
 });
 
 // Handle messages from content scripts or popup
