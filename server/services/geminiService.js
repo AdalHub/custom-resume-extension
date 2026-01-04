@@ -229,7 +229,15 @@ ${jobText}
 ORIGINAL RESUME TEXT:
 ${resumeText}
 
-Generate a tailored resume JSON. ${includeCoverLetter ? 'Also generate a cover letter.' : ''}
+Generate a tailored resume JSON. ${includeCoverLetter ? `Also generate a cover letter. 
+
+CRITICAL COVER LETTER REQUIREMENTS:
+- The cover letter must be tailored to the specific company mentioned in the job posting
+- Extract the company name from the job posting text above
+- Start the cover letter with a greeting that includes the actual company name (e.g., "Dear [Company Name] Team," or "Dear Hiring Manager at [Company Name],")
+- Do NOT use placeholder text like "Company Name", "Company", or generic "Dear Hiring Manager," 
+- If you cannot identify the company name from the job posting, use "Dear Hiring Manager," as a last resort
+- The cover letter should be professional, tailored to the job requirements, and highlight relevant experience from the resume` : ''}
 
 Return a JSON object with this structure:
 {
@@ -292,7 +300,7 @@ Return a JSON object with this structure:
       "jobRequirementsNotMatched": ["array of requirements not in resume"]
     }
   },
-  "coverLetterText": "${includeCoverLetter ? 'string - tailored cover letter' : 'null or omit'}",
+  "coverLetterText": "${includeCoverLetter ? 'string - tailored cover letter that includes the actual company name in the greeting (e.g., "Dear [Company Name] Team," or "Dear Hiring Manager at [Company Name],"). Do NOT use placeholders.' : 'null or omit'}",
   "claimMap": [
     {
       "bulletText": "string - exact bullet text",

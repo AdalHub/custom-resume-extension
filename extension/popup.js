@@ -75,6 +75,17 @@ async function generateResume(backendUrl, includeCoverLetter) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const jobData = await captureJobDescription(tab.id);
     
+    // Log captured job data for debugging
+    console.log('Captured job data:', {
+      jobTextLength: jobData.jobText?.length || 0,
+      jobUrl: jobData.jobUrl,
+      jobTextPreview: jobData.jobText?.substring(0, 200) || 'No job text captured'
+    });
+    
+    if (!jobData.jobText || jobData.jobText.trim().length === 0) {
+      console.warn('Warning: No job description text was captured from the page');
+    }
+    
     // Get userId (could be from storage or generate anonymous)
     const userId = 'anonymous'; // TODO: Get from storage or generate
 
