@@ -36,3 +36,4 @@ The extension references icon files that need to be created:
 You can create simple placeholder icons or use an icon generator tool.
 
 
+

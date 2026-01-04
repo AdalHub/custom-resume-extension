@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loadingSpinner = document.getElementById('loadingSpinner');
   const statusArea = document.getElementById('statusArea');
   const errorMessage = document.getElementById('errorMessage');
+  const closeBtn = document.getElementById('closeBtn');
 
   // Check if resume is saved
   const result = await chrome.storage.local.get([STORAGE_KEY, BACKEND_URL_KEY]);
@@ -28,6 +29,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusIndicator.className = 'status-indicator not-ready';
     generateBtn.disabled = true;
   }
+
+  // Close button - closes the popup
+  closeBtn.addEventListener('click', () => {
+    window.close();
+  });
 
   // Open settings
   openSettingsBtn.addEventListener('click', () => {
@@ -153,6 +159,7 @@ function displayResults(data) {
   const flagsList = document.getElementById('flagsList');
   const downloadResumeBtn = document.getElementById('downloadResumeBtn');
   const downloadCoverBtn = document.getElementById('downloadCoverBtn');
+  const downloadBothBtn = document.getElementById('downloadBothBtn');
 
   // Show status area
   statusArea.classList.add('visible');
@@ -199,15 +206,77 @@ function displayResults(data) {
   }
 
   // Display download buttons
-  if (data.pdfUrl) {
-    downloadResumeBtn.href = data.pdfUrl;
-    downloadResumeBtn.style.display = 'inline-block';
-  }
+  const hasResume = data.pdfUrl;
+  const hasCover = data.coverLetterPdfUrl;
 
-  if (data.coverLetterPdfUrl) {
-    downloadCoverBtn.href = data.coverLetterPdfUrl;
+  // Show "Download Both" button if both files are available
+  if (hasResume && hasCover) {
+    downloadBothBtn.style.display = 'block';
+    downloadBothBtn.onclick = () => downloadBothFiles(data.pdfUrl, data.coverLetterPdfUrl);
+    // Still show individual buttons below
+    downloadResumeBtn.style.display = 'inline-block';
+    downloadResumeBtn.onclick = () => downloadFile(data.pdfUrl, 'resume.pdf');
     downloadCoverBtn.style.display = 'inline-block';
+    downloadCoverBtn.onclick = () => downloadFile(data.coverLetterPdfUrl, 'cover-letter.pdf');
+  } else {
+    downloadBothBtn.style.display = 'none';
+    if (hasResume) {
+      downloadResumeBtn.style.display = 'inline-block';
+      downloadResumeBtn.onclick = () => downloadFile(data.pdfUrl, 'resume.pdf');
+    } else {
+      downloadResumeBtn.style.display = 'none';
+    }
+    if (hasCover) {
+      downloadCoverBtn.style.display = 'inline-block';
+      downloadCoverBtn.onclick = () => downloadFile(data.coverLetterPdfUrl, 'cover-letter.pdf');
+    } else {
+      downloadCoverBtn.style.display = 'none';
+    }
   }
+}
+
+// Programmatic download function that doesn't close the popup
+async function downloadFile(url, filename) {
+  try {
+    // Get backend URL to construct full URL if needed
+    const result = await chrome.storage.local.get([BACKEND_URL_KEY]);
+    const backendUrl = result[BACKEND_URL_KEY] || 'http://localhost:8787';
+    
+    // Construct full URL if it's a relative path
+    const fullUrl = url.startsWith('http') ? url : `${backendUrl}${url}`;
+    
+    // Fetch the file
+    const response = await fetch(fullUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download file: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    
+    // Create a temporary anchor element and trigger download
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    // Clean up the blob URL after a short delay
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+  } catch (error) {
+    console.error('Error downloading file:', error);
+    alert(`Failed to download ${filename}: ${error.message}`);
+  }
+}
+
+// Download both files simultaneously
+async function downloadBothFiles(resumeUrl, coverUrl) {
+  // Download both files with a small delay between them
+  await downloadFile(resumeUrl, 'resume.pdf');
+  // Small delay to ensure first download starts
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await downloadFile(coverUrl, 'cover-letter.pdf');
 }
 
 function escapeHtml(text) {

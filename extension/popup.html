@@ -20,11 +20,35 @@
       text-align: center;
       border-bottom: 2px solid #e5e7eb;
       padding-bottom: 15px;
+      position: relative;
     }
     .popup-header h1 {
       font-size: 22px;
       color: #1e40af;
       margin: 0;
+    }
+    .close-btn {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: none;
+      border: none;
+      font-size: 28px;
+      color: #6b7280;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s;
+      line-height: 1;
+      padding: 0;
+    }
+    .close-btn:hover {
+      background: #f3f4f6;
+      color: #374151;
     }
     .form-section {
       margin-bottom: 20px;
@@ -182,9 +206,9 @@
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      text-decoration: none;
       text-align: center;
       display: inline-block;
+      transition: background 0.2s;
     }
     .download-btn:hover {
       background: #059669;
@@ -194,6 +218,14 @@
     }
     .download-btn.secondary:hover {
       background: #2563eb;
+    }
+    .download-btn.download-both {
+      width: 100%;
+      margin-bottom: 8px;
+      background: #8b5cf6;
+    }
+    .download-btn.download-both:hover {
+      background: #7c3aed;
     }
     .error-message {
       padding: 12px;
@@ -228,6 +260,7 @@
   <div class="popup-container">
     <div class="popup-header">
       <h1>ProofResume</h1>
+      <button id="closeBtn" class="close-btn" title="Close popup">×</button>
     </div>
 
     <div id="statusIndicator" class="status-indicator not-ready">
@@ -269,12 +302,15 @@
       </div>
 
       <div class="download-buttons">
-        <a id="downloadResumeBtn" class="download-btn" href="#" target="_blank" style="display: none;">
+        <button id="downloadBothBtn" class="download-btn download-both" style="display: none;">
+          Download Both PDFs
+        </button>
+        <button id="downloadResumeBtn" class="download-btn" style="display: none;">
           Download Resume PDF
-        </a>
-        <a id="downloadCoverBtn" class="download-btn secondary" href="#" target="_blank" style="display: none;">
+        </button>
+        <button id="downloadCoverBtn" class="download-btn secondary" style="display: none;">
           Download Cover Letter
-        </a>
+        </button>
       </div>
     </div>
   </div>
